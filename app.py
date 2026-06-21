@@ -1,6 +1,8 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from PIL import Image
+import cv2
+import numpy as np
 import os
 
 app = Flask(__name__)
@@ -18,24 +20,99 @@ def home():
 
 @app.route("/upload", methods=["POST"])
 def upload():
+
     if "image" not in request.files:
-        return jsonify({"error": "No image uploaded"})
+        return jsonify({
+            "success": False,
+            "error": "No image uploaded"
+        })
 
     file = request.files["image"]
 
-    path = os.path.join(UPLOAD_FOLDER, file.filename)
+    path = os.path.join(
+        UPLOAD_FOLDER,
+        file.filename
+    )
+
     file.save(path)
 
-    img = Image.open(path)
+    image = cv2.imread(path)
 
-    width, height = img.size
+    gray = cv2.cvtColor(
+        image,
+        cv2.COLOR_BGR2GRAY
+    )
+
+    blur = cv2.GaussianBlur(
+        gray,
+        (5,5),
+        0
+    )
+
+    edges = cv2.Canny(
+        blur,
+        50,
+        150
+    )
+
+    contours, _ = cv2.findContours(
+        edges,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    largest = None
+    max_area = 0
+
+    for cnt in contours:
+
+        area = cv2.contourArea(cnt)
+
+        if area > max_area:
+            max_area = area
+            largest = cnt
+
+    if largest is not None:
+
+        x, y, w, h = cv2.boundingRect(
+            largest
+        )
+
+        cropped = image[
+            y:y+h,
+            x:x+w
+        ]
+
+        crop_name = (
+            "crop_" +
+            file.filename
+        )
+
+        crop_path = os.path.join(
+            UPLOAD_FOLDER,
+            crop_name
+        )
+
+        cv2.imwrite(
+            crop_path,
+            cropped
+        )
+
+        return jsonify({
+            "success": True,
+            "filename": file.filename,
+            "cropped": crop_name,
+            "width": w,
+            "height": h
+        })
 
     return jsonify({
-        "success": True,
-        "filename": file.filename,
-        "width": width,
-        "height": height
+        "success": False,
+        "error": "Document not detected"
     })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(
+        host="0.0.0.0",
+        port=5000
+    )
