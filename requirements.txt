@@ -13,3 +13,9 @@ pillow
 gunicorn
 opencv-python-headless
 numpy
+flask
+flask-cors
+opencv-python-headless
+numpy
+pillow
+gunicorn
