@@ -1,64 +1,39 @@
-from flask import Flask, request, send_file
-import cv2
-import numpy as np
-import tempfile
+from flask import Flask, request, jsonify
+from PIL import Image
+import os
 
 app = Flask(__name__)
+
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route("/")
 def home():
     return {
         "status": "running",
-        "service": "AI Auto Crop API"
+        "service": "Cyber Cafe AI Crop API"
     }
 
-@app.route("/clean", methods=["POST"])
-def clean():
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "image" not in request.files:
+        return jsonify({"error": "No image uploaded"})
 
-    file = request.files["file"]
+    file = request.files["image"]
 
-    image = cv2.imdecode(
-        np.frombuffer(file.read(), np.uint8),
-        cv2.IMREAD_COLOR
-    )
+    path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(path)
 
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    img = Image.open(path)
 
-    blur = cv2.GaussianBlur(gray, (5,5), 0)
+    width, height = img.size
 
-    edges = cv2.Canny(blur, 50, 150)
-
-    contours, _ = cv2.findContours(
-        edges,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
-    )
-
-    if contours:
-
-        largest = max(contours, key=cv2.contourArea)
-
-        x, y, w, h = cv2.boundingRect(largest)
-
-        image = image[y:y+h, x:x+w]
-
-    cleaned = cv2.detailEnhance(
-        image,
-        sigma_s=10,
-        sigma_r=0.15
-    )
-
-    temp = tempfile.NamedTemporaryFile(
-        suffix=".jpg",
-        delete=False
-    )
-
-    cv2.imwrite(temp.name, cleaned)
-
-    return send_file(
-        temp.name,
-        mimetype="image/jpeg"
-    )
+    return jsonify({
+        "success": True,
+        "filename": file.filename,
+        "width": width,
+        "height": height
+    })
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0")
+    app.run(host="0.0.0.0", port=5000)
