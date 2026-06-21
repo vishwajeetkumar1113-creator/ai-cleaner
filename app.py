@@ -1,8 +1,6 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
-from PIL import Image
 import cv2
-import numpy as np
 import os
 
 app = Flask(__name__)
@@ -11,12 +9,22 @@ CORS(app)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+
+@app.route("/uploads/<filename>")
+def uploaded_file(filename):
+    return send_from_directory(
+        UPLOAD_FOLDER,
+        filename
+    )
+
+
 @app.route("/")
 def home():
     return {
         "status": "running",
         "service": "Cyber Cafe AI Crop API"
     }
+
 
 @app.route("/upload", methods=["POST"])
 def upload():
@@ -29,14 +37,20 @@ def upload():
 
     file = request.files["image"]
 
-    path = os.path.join(
+    original_path = os.path.join(
         UPLOAD_FOLDER,
         file.filename
     )
 
-    file.save(path)
+    file.save(original_path)
 
-    image = cv2.imread(path)
+    image = cv2.imread(original_path)
+
+    if image is None:
+        return jsonify({
+            "success": False,
+            "error": "Invalid image"
+        })
 
     gray = cv2.cvtColor(
         image,
@@ -45,7 +59,7 @@ def upload():
 
     blur = cv2.GaussianBlur(
         gray,
-        (5,5),
+        (5, 5),
         0
     )
 
@@ -102,6 +116,10 @@ def upload():
             "success": True,
             "filename": file.filename,
             "cropped": crop_name,
+            "cropped_url":
+                request.host_url +
+                "uploads/" +
+                crop_name,
             "width": w,
             "height": h
         })
@@ -110,6 +128,7 @@ def upload():
         "success": False,
         "error": "Document not detected"
     })
+
 
 if __name__ == "__main__":
     app.run(
